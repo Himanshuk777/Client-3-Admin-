@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Synergy Admin | Control Panel</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            purple: '#5D2EC0',
+                            purpleDark: '#4a249d',
+                            orange: '#FFB800',
+                            black: '#050505',
+                            dark: '#0A0A0A',
+                            surface: '#121212'
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
+
+    <style>
+        /* Lock Scroll on Body */
+        body { 
+            overflow: hidden; 
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overscroll-behavior-y: none;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scroll { overflow-y: auto; }
+        .custom-scroll::-webkit-scrollbar { width: 5px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #5D2EC0; border-radius: 4px; }
+
+        /* Glassmorphism */
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .dark .glass {
+            background: rgba(20, 20, 20, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        /* Nav Active State - Forces Purple Background */
+        .nav-active {
+            background-color: #5D2EC0 !important;
+            color: white !important;
+            box-shadow: 0 4px 15px rgba(93, 46, 192, 0.4);
+        }
+
+        /* Inactive Nav State */
+        .nav-inactive {
+            color: #6b7280; /* text-gray-500 */
+        }
+        .dark .nav-inactive {
+            color: #9ca3af; /* text-gray-400 */
+        }
+        
+        /* Lock Screen Transitions */
+        #lockScreen { transition: opacity 0.5s ease-out, visibility 0.5s; }
+        .unlocked { opacity: 0; visibility: hidden; pointer-events: none; }
+    </style>
+</head>
+<body class="antialiased bg-gray-50 text-gray-900 dark:bg-brand-black dark:text-white transition-colors duration-300">
+
+    <!-- 1. RESPONSIVE LOCK SCREEN -->
+    <div id="lockScreen" class="fixed inset-0 z-[9999] bg-brand-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4">
+        <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-64 h-64 bg-brand-purple rounded-full blur-[100px] opacity-20 animate-pulse-slow"></div>
+        
+        <div class="relative w-full max-w-[340px] bg-white/10 dark:bg-[#1A1A1A]/80 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-md text-center">
+            <div class="w-16 h-16 bg-brand-purple/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-brand-purple/30 shadow-lg shadow-brand-purple/10">
+                <i class="ph ph-lock-key text-3xl text-brand-purple"></i>
+            </div>
+            
+            <h1 class="text-xl font-bold text-white mb-2 tracking-tight">Admin Portal</h1>
+            <p class="text-gray-400 text-xs mb-8">Secure Environment. Authorization Required.</p>
+            
+            <form id="lockForm" class="space-y-4">
+                <div class="relative">
+                    <input type="password" id="adminPass" placeholder="Enter PIN" class="w-full h-12 px-4 rounded-xl bg-black/50 border border-white/10 text-white text-center text-lg tracking-widest focus:border-brand-orange focus:ring-1 focus:ring-brand-orange outline-none transition-all placeholder:text-gray-600 placeholder:tracking-normal placeholder:text-sm">
+                </div>
+                <button type="submit" class="w-full h-12 bg-brand-purple hover:bg-brand-purpleDark active:scale-95 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center gap-2">
+                    <i class="ph ph-fingerprint text-lg"></i> Access
+                </button>
+            </form>
+            <p id="lockError" class="mt-4 text-red-500 text-xs font-semibold hidden flex items-center justify-center gap-1">
+                <i class="ph ph-warning"></i> Incorrect PIN
+            </p>
+        </div>
+        <p class="absolute bottom-8 text-gray-600 text-[10px] uppercase tracking-widest">Synergy IT Services • Admin</p>
+    </div>
+
+    <!-- 2. MAIN APP CONTAINER -->
+    <div id="appContainer" class="flex flex-col h-full">
+        
+        <!-- Header -->
+        <header class="h-16 flex-shrink-0 border-b border-gray-200 dark:border-white/10 bg-white/80 dark:bg-brand-black/90 backdrop-blur-md flex items-center justify-between px-4 lg:px-6 z-40">
+            <div class="flex items-center gap-3">
+                <img src="https://ik.imagekit.io/euvw7ycluf/Client%203/1000255610-removebg-preview-1.png" alt="Synergy Logo" class="w-8 h-auto object-contain">
+                <span class="font-bold text-base text-gray-900 dark:text-white">Admin</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <!-- Theme Toggle -->
+                <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition text-gray-600 dark:text-gray-300">
+                    <i id="themeIcon" class="ph ph-moon text-xl"></i>
+                </button>
+                
+                <!-- NEW: Admin Profile Icon (Vector) -->
+                <div class="w-9 h-9 rounded-full bg-brand-purple/10 border border-brand-purple/20 flex items-center justify-center text-brand-purple shadow-sm">
+                    <i class="ph ph-user-gear text-xl"></i>
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Content -->
+        <main id="mainContent" class="flex-1 custom-scroll p-4 pb-32">
+            <div class="max-w-7xl mx-auto space-y-6">
+                
+                <!-- DASHBOARD VIEW -->
+                <section id="dashboardView" class="animate-fade-in space-y-5">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">Overview</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Total Users -->
+                        <div class="glass p-5 rounded-2xl flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase">Total Users</p>
+                                <h3 id="statTotal" class="text-3xl font-bold text-gray-900 dark:text-white mt-1">--</h3>
+                            </div>
+                            <div class="w-10 h-10 bg-brand-purple/10 rounded-full flex items-center justify-center text-brand-purple">
+                                <i class="ph ph-users text-xl"></i>
+                            </div>
+                        </div>
+
+                        <!-- Students -->
+                        <div class="glass p-5 rounded-2xl flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase">Students</p>
+                                <h3 id="statStudents" class="text-3xl font-bold text-brand-orange mt-1">--</h3>
+                            </div>
+                            <div class="w-10 h-10 bg-brand-orange/10 rounded-full flex items-center justify-center text-brand-orange">
+                                <i class="ph ph-student text-xl"></i>
+                            </div>
+                        </div>
+
+                        <!-- Companies -->
+                        <div class="glass p-5 rounded-2xl flex items-center justify-between">
+                            <div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase">Companies</p>
+                                <h3 id="statCompanies" class="text-3xl font-bold text-blue-500 mt-1">--</h3>
+                            </div>
+                            <div class="w-10 h-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500">
+                                <i class="ph ph-briefcase text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- PROJECTS VIEW -->
+                <section id="projectsView" class="hidden animate-fade-in space-y-5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-900 dark:text-white">Projects</h2>
+                            <p class="text-xs text-gray-500">Manage database entries.</p>
+                        </div>
+                        <button onclick="openModal('projectModal')" class="bg-brand-purple hover:bg-brand-purpleDark active:scale-95 text-white px-4 py-2 rounded-lg font-bold text-sm transition shadow-lg flex items-center gap-2">
+                            <i class="ph ph-plus-circle text-lg"></i> <span class="hidden sm:inline">Add New</span>
+                        </button>
+                    </div>
+
+                    <!-- Grid -->
+                    <div id="projectsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        <div class="col-span-full py-12 text-center text-gray-500 flex flex-col items-center">
+                            <i class="ph ph-spinner animate-spin text-2xl mb-2"></i>
+                            <span class="text-sm">Connecting to Database...</span>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+
+        <!-- Bottom Navigation (Fixed) -->
+        <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-auto">
+            <div class="glass bg-white/90 dark:bg-[#121212]/90 p-1.5 rounded-full flex items-center gap-1 shadow-2xl shadow-black/20 border border-gray-200 dark:border-white/10">
+                
+                <!-- Dashboard Button -->
+                <button onclick="switchTab('dashboard')" id="btnDash" class="nav-active px-5 py-2.5 rounded-full flex items-center gap-2 transition-all duration-300">
+                    <i class="ph ph-squares-four text-lg"></i>
+                    <span class="font-semibold text-xs">Dash</span>
+                </button>
+                
+                <!-- Projects Button -->
+                <button onclick="switchTab('projects')" id="btnProj" class="nav-inactive px-5 py-2.5 rounded-full flex items-center gap-2 transition-all duration-300 hover:bg-black/5 dark:hover:bg-white/5">
+                    <i class="ph ph-kanban text-lg"></i>
+                    <span class="font-semibold text-xs">Projects</span>
+                </button>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ADD/EDIT PROJECT -->
+    <div id="projectModal" class="fixed inset-0 z-[100] hidden">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onclick="closeModal('projectModal')"></div>
+        
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md max-h-[85vh] overflow-y-auto custom-scroll">
+            <div class="bg-white dark:bg-[#151515] rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="modalTitle" class="text-lg font-bold text-gray-900 dark:text-white">Add Project</h2>
+                    <button onclick="closeModal('projectModal')" class="p-2 bg-gray-100 dark:bg-white/5 rounded-full hover:text-red-500 transition"><i class="ph ph-x text-lg"></i></button>
+                </div>
+                
+                <form id="projectForm" class="space-y-4">
+                    <input type="hidden" id="editKey">
+                    
+                    <div>
+                        <label class="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Course / Project Name</label>
+                        <input type="text" id="pCourseName" required class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-brand-purple outline-none text-sm dark:text-white" placeholder="e.g. Mobile App Dev">
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Thumbnail URL</label>
+                        <input type="url" id="pThumbnail" class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-brand-purple outline-none text-sm dark:text-white" placeholder="https://...">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Price (₹)</label>
+                            <input type="number" id="pPrice" required class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-brand-purple outline-none text-sm dark:text-white">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Ratings</label>
+                            <input type="number" step="0.1" max="5" id="pRatings" required class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-brand-purple outline-none text-sm dark:text-white">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Description</label>
+                        <textarea id="pDescription" rows="3" required class="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 focus:border-brand-purple outline-none text-sm dark:text-white resize-none"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full py-3 bg-brand-purple text-white font-bold rounded-xl shadow-lg shadow-purple-500/20 active:scale-95 transition-transform mt-2">
+                        Save Project
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- 1. Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAoxHSd6vB_LeqVpzNgnbYHu1N576oMA1E",
+            authDomain: "client-56012.firebaseapp.com",
+            databaseURL: "https://client-56012-default-rtdb.firebaseio.com",
+            projectId: "client-56012",
+            storageBucket: "client-56012.firebasestorage.app",
+            messagingSenderId: "496621638658",
+            appId: "1:496621638658:web:63e7286582ea1167fb031b"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // --- 2. Admin Lock Logic ---
+        document.getElementById('lockForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const pass = document.getElementById('adminPass').value;
+            const errorMsg = document.getElementById('lockError');
+            
+            if (pass === 'ClientS') {
+                const lockScreen = document.getElementById('lockScreen');
+                lockScreen.classList.add('unlocked');
+                initApp();
+            } else {
+                errorMsg.classList.remove('hidden');
+                document.getElementById('adminPass').value = '';
+                document.getElementById('adminPass').focus();
+                setTimeout(() => errorMsg.classList.add('hidden'), 2500);
+            }
+        });
+
+        // --- 3. UI Navigation Logic (FIXED) ---
+        function switchTab(tab) {
+            const views = {
+                dashboard: document.getElementById('dashboardView'),
+                projects: document.getElementById('projectsView')
+            };
+            const btns = {
+                dashboard: document.getElementById('btnDash'),
+                projects: document.getElementById('btnProj')
+            };
+
+            if (tab === 'dashboard') {
+                // Show Dashboard
+                views.dashboard.classList.remove('hidden');
+                views.projects.classList.add('hidden');
+                
+                // Style Dashboard Button (Active)
+                btns.dashboard.classList.add('nav-active');
+                btns.dashboard.classList.remove('nav-inactive');
+                
+                // Style Projects Button (Inactive)
+                btns.projects.classList.remove('nav-active');
+                btns.projects.classList.add('nav-inactive');
+
+            } else {
+                // Show Projects
+                views.dashboard.classList.add('hidden');
+                views.projects.classList.remove('hidden');
+                
+                // Style Projects Button (Active)
+                btns.projects.classList.add('nav-active');
+                btns.projects.classList.remove('nav-inactive');
+                
+                // Style Dashboard Button (Inactive)
+                btns.dashboard.classList.remove('nav-active');
+                btns.dashboard.classList.add('nav-inactive');
+            }
+        }
+
+        // --- 4. Data Fetching ---
+        function initApp() {
+            // Dashboard Stats
+            db.ref('users').on('value', (snapshot) => {
+                const users = snapshot.val() || {};
+                let total = 0, students = 0, companies = 0;
+                
+                Object.values(users).forEach(u => {
+                    total++;
+                    if(u.userType === 'student') students++;
+                    else if(u.userType === 'company') companies++;
+                });
+
+                document.getElementById('statTotal').innerText = total;
+                document.getElementById('statStudents').innerText = students;
+                document.getElementById('statCompanies').innerText = companies;
+            });
+
+            // Projects List
+            db.ref('admin/projects').on('value', (snapshot) => {
+                const projects = snapshot.val();
+                const grid = document.getElementById('projectsGrid');
+                grid.innerHTML = '';
+
+                if (!projects) {
+                    grid.innerHTML = `
+                        <div class="col-span-full flex flex-col items-center justify-center text-gray-500 py-10 opacity-60">
+                            <i class="ph ph-folder-open text-4xl mb-2"></i>
+                            <p>No projects found</p>
+                        </div>`;
+                    return;
+                }
+
+                Object.entries(projects).forEach(([key, data]) => {
+                    const card = `
+                    <div class="glass rounded-2xl overflow-hidden border border-gray-200 dark:border-white/5 group relative">
+                        <div class="h-40 bg-gray-100 dark:bg-white/5 relative overflow-hidden">
+                            <img src="${data.thumbnail || ''}" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" onerror="this.src='https://placehold.co/600x400?text=No+Image'">
+                            <div class="absolute top-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1">
+                                <i class="ph ph-star-fill text-brand-orange"></i> ${data.ratings}
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="flex justify-between items-start mb-1">
+                                <h3 class="font-bold text-base text-gray-900 dark:text-white truncate flex-1 pr-2">${data.courseName}</h3>
+                                <span class="text-brand-purple font-bold text-sm">₹${data.price}</span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 h-8 mb-4">${data.description}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="editProject('${key}')" class="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-brand-purple hover:text-white transition">
+                                    <i class="ph ph-pencil-simple"></i> Edit
+                                </button>
+                                <button onclick="deleteProject('${key}')" class="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 text-xs font-bold hover:bg-red-500 hover:text-white transition">
+                                    <i class="ph ph-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>`;
+                    grid.innerHTML += card;
+                });
+            });
+        }
+
+        // --- 5. CRUD ---
+        document.getElementById('projectForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const key = document.getElementById('editKey').value;
+            const projectData = {
+                courseName: document.getElementById('pCourseName').value,
+                thumbnail: document.getElementById('pThumbnail').value,
+                price: Number(document.getElementById('pPrice').value),
+                ratings: Number(document.getElementById('pRatings').value),
+                description: document.getElementById('pDescription').value
+            };
+
+            const ref = key ? db.ref(`admin/projects/${key}`) : db.ref('admin/projects').push();
+            (key ? ref.update(projectData) : ref.set(projectData)).then(() => closeModal('projectModal'));
+        });
+
+        function deleteProject(key) {
+            if(confirm('Delete this project?')) db.ref(`admin/projects/${key}`).remove();
+        }
+
+        function editProject(key) {
+            db.ref(`admin/projects/${key}`).once('value').then(snapshot => {
+                const data = snapshot.val();
+                if(!data) return;
+                document.getElementById('editKey').value = key;
+                document.getElementById('pCourseName').value = data.courseName;
+                document.getElementById('pThumbnail').value = data.thumbnail;
+                document.getElementById('pPrice').value = data.price;
+                document.getElementById('pRatings').value = data.ratings;
+                document.getElementById('pDescription').value = data.description;
+                document.getElementById('modalTitle').innerText = "Edit Project";
+                openModal('projectModal');
+            });
+        }
+
+        // --- 6. Utilities ---
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if(id === 'projectModal' && document.getElementById('modalTitle').innerText !== "Edit Project") {
+                document.getElementById('projectForm').reset();
+                document.getElementById('editKey').value = '';
+            }
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            if(id === 'projectModal') {
+                setTimeout(() => {
+                    document.getElementById('projectForm').reset();
+                    document.getElementById('editKey').value = '';
+                    document.getElementById('modalTitle').innerText = "Add Project";
+                }, 200);
+            }
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('themeIcon');
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+                icon.classList.replace('ph-moon', 'ph-sun');
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                icon.classList.replace('ph-sun', 'ph-moon');
+            }
+        }
+
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.remove('dark');
+            document.getElementById('themeIcon').classList.replace('ph-moon', 'ph-sun');
+        }
+    </script>
+</body>
+</html>
